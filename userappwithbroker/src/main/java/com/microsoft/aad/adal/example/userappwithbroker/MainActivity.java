@@ -55,12 +55,14 @@ import com.microsoft.aad.adal.Telemetry;
 import com.microsoft.aad.adal.UserInfo;
 
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.io.UnsupportedEncodingException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.spec.InvalidKeySpecException;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.Semaphore;
 
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
@@ -164,6 +166,34 @@ public class MainActivity extends Activity {
                     showMessage("Cannot make acquire token silent call for "
                             + "resource 2 since no user unique id is passed.");
                 }
+            }
+        });
+
+        Button buttonNonEmptyCacheStressTest = (Button)findViewById(R.id.NonEmptyCacheStressTest);
+        buttonNonEmptyCacheStressTest.setOnClickListener(new View.OnClickListener() {
+
+            @Override
+            public void onClick(View v) {
+                try {
+                    callNonEmptyCacheStressTest(getUserLoginHint());
+                } catch (final InterruptedException exception) {
+                    //TODO
+                }
+
+            }
+        });
+
+        Button buttonEmptyCacheStressTest = (Button)findViewById(R.id.EmptyCacheStressTest);
+        buttonEmptyCacheStressTest.setOnClickListener(new View.OnClickListener() {
+
+            @Override
+            public void onClick(View v) {
+                try {
+                    callEmptyCacheStressTest(getUserLoginHint());
+                } catch (final InterruptedException exception) {
+                    //TODO
+                }
+
             }
         });
 
@@ -322,6 +352,83 @@ public class MainActivity extends Activity {
     private String getUserLoginHint() {
         return mEditText.getText().toString();
     }
+
+
+    //Empty cache stress tests
+    /*
+     10 threads calling acquireTokenSilient at the same
+    time for 8 hours, while the cache is empty.
+*/
+    private void callEmptyCacheStressTest(String User_UPN) throws InterruptedException{
+        final int MAX_AVAILABLE = 10;
+        final int TIME_LIMIT = 10 * 1000;//2 * 60 * 60 * 1000;
+        final Semaphore available = new Semaphore(MAX_AVAILABLE, true);
+        final long startTime = System.currentTimeMillis();
+
+        //clear the cache
+        mAuthContext.getCache().removeAll();
+
+        while ((System.currentTimeMillis() - startTime) < TIME_LIMIT)
+        {
+            available.tryAcquire(1);
+            mAuthContext.acquireTokenSilentAsync(RESOURCE_ID, CLIENT_ID, User_UPN, new AuthenticationCallback<AuthenticationResult>(){
+                @Override
+                public void onSuccess(AuthenticationResult authenticationResult) {
+                    mAuthContext.getCache().removeAll();
+                    available.release(1);
+                }
+                @Override
+                public void onError(Exception exc) {
+                    mAuthContext.getCache().removeAll();
+                    available.release(1);
+                }
+            });
+        }
+    }
+
+    //Non-empty cache stress tests
+    /*
+    With RT in cache, 10 threads calling acquireTokenSilient
+    at the same time for 8 hours. Each acquireTokenSilent
+    call will delete the AT when the call is finished. 
+     */
+
+    private void callNonEmptyCacheStressTest(String User_UPN) throws InterruptedException{
+        final int MAX_AVAILABLE = 10;
+        final int TIME_LIMIT = 10 * 1000; //2 * 60 * 60 * 1000;
+        final Semaphore available = new Semaphore(MAX_AVAILABLE, true);
+        final long startTime = System.currentTimeMillis();
+
+        //clear the cache
+        mAuthContext.getCache().removeAll();
+
+        //get the token with interactive auth
+        callAcquireTokenWithResource(RESOURCE_ID, PromptBehavior.Auto, User_UPN);
+
+
+        while ((System.currentTimeMillis() - startTime) < TIME_LIMIT)
+        {
+            available.tryAcquire(1);
+            mAuthContext.acquireTokenSilentAsync(RESOURCE_ID, CLIENT_ID, User_UPN, new AuthenticationCallback<AuthenticationResult>(){
+                @Override
+                public void onSuccess(AuthenticationResult authenticationResult) {
+                    available.release(1);
+                }
+                @Override
+                public void onError(Exception exc) {
+                    available.release(1);
+                }
+            });
+        }
+    }
+
+    private void callAcquireTokenSilentPolling() {
+
+        
+    }
+
+
+
 
     /**
      * Sample code for getting signature for current package name. 
