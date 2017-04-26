@@ -755,6 +755,7 @@ class AcquireTokenRequest {
 
         public void onError(final AuthenticationException e) {
             if (mCallback != null) {
+                /*Logger.v(TAG, "has callback");
                 if (mRefHandler != null) {
                     mRefHandler.post(new Runnable() {
                         @Override
@@ -762,21 +763,23 @@ class AcquireTokenRequest {
                             mCallback.onError(e);
                         }
                     });
-                } else {
+                } else {*/
                     mCallback.onError(e);
-                }
+                //}
             }
         }
 
         public void onSuccess(final AuthenticationResult result) {
             if (mCallback != null) {
+                //Logger.v(TAG, "WTF in success callback");
                 if (mRefHandler != null) {
-                    mRefHandler.post(new Runnable() {
-                        @Override
-                        public void run() {
-                            mCallback.onSuccess(result);
-                        }
-                    });
+                    mCallback.onSuccess(result);
+//                    mRefHandler.post(new Runnable() {
+//                        @Override
+//                        public void run() {
+//                            mCallback.onSuccess(result);
+//                        }
+//                    });
                 } else {
                     mCallback.onSuccess(result);
                 }
