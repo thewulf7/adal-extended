@@ -60,8 +60,13 @@ import java.io.UnsupportedEncodingException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.spec.InvalidKeySpecException;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 
 import javax.crypto.SecretKey;
@@ -174,12 +179,17 @@ public class MainActivity extends Activity {
 
             @Override
             public void onClick(View v) {
-                try {
-                    callNonEmptyCacheStressTest(getUserLoginHint());
-                } catch (final InterruptedException exception) {
-                    //TODO
+                final String userId = getUserIdBasedOnUPN(getUserLoginHint());
+                if (userId != null) {
+                    try {
+                        callNonEmptyCacheStressTest(userId);
+                    } catch (final InterruptedException exception) {
+                        //TODO
+                    }
+                } else {
+                    showMessage("Cannot make acquire token silent call for "
+                            + "resource 2 since no user unique id is passed.");
                 }
-
             }
         });
 
@@ -192,6 +202,7 @@ public class MainActivity extends Activity {
                     callEmptyCacheStressTest(getUserLoginHint());
                 } catch (final InterruptedException exception) {
                     //TODO
+                    showMessage("Exception caught here: " + exception.getMessage());
                 }
 
             }
@@ -359,31 +370,60 @@ public class MainActivity extends Activity {
      10 threads calling acquireTokenSilient at the same
     time for 8 hours, while the cache is empty.
 */
-    private void callEmptyCacheStressTest(String User_UPN) throws InterruptedException{
+    private void callEmptyCacheStressTest(final String User_UPN) throws InterruptedException{
         final int MAX_AVAILABLE = 10;
-        final int TIME_LIMIT = 10 * 1000;//2 * 60 * 60 * 1000;
+        final int TIME_LIMIT = 10 * 1000;
         final Semaphore available = new Semaphore(MAX_AVAILABLE, true);
         final long startTime = System.currentTimeMillis();
 
         //clear the cache
         mAuthContext.getCache().removeAll();
 
-        while ((System.currentTimeMillis() - startTime) < TIME_LIMIT)
-        {
-            available.tryAcquire(1);
-            mAuthContext.acquireTokenSilentAsync(RESOURCE_ID, CLIENT_ID, User_UPN, new AuthenticationCallback<AuthenticationResult>(){
+        ExecutorService executor = Executors.newFixedThreadPool(10);
+
+        while(System.currentTimeMillis() - startTime < TIME_LIMIT) {
+            executor.submit(new Runnable() {
                 @Override
-                public void onSuccess(AuthenticationResult authenticationResult) {
-                    mAuthContext.getCache().removeAll();
-                    available.release(1);
-                }
-                @Override
-                public void onError(Exception exc) {
-                    mAuthContext.getCache().removeAll();
-                    available.release(1);
+                public void run() {
+                    mAuthContext.acquireTokenSilentAsync(RESOURCE_ID, CLIENT_ID, User_UPN, new AuthenticationCallback<AuthenticationResult>() {
+
+                        @Override
+                        public void onSuccess(AuthenticationResult authenticationResult) {
+                            //showMessage("Response from broker: " + authenticationResult.getAccessToken());
+                        }
+
+                        @Override
+                        public void onError(Exception exc) {
+                            //showMessage("Error occured when acquiring token silently: " + exc.getMessage());
+                        }
+                    });
                 }
             });
         }
+
+        executor.shutdownNow();
+        System.err.println( "All done." );
+
+        /*while ((System.currentTimeMillis() - startTime) < TIME_LIMIT)
+        {
+            if (available.tryAcquire()) {
+                Logger.v("callEmptyCacheStressTest", "Inside Avail permits: " + available.availablePermits());
+                mAuthContext.acquireTokenSilentAsync(RESOURCE_ID, CLIENT_ID, User_UPN, new AuthenticationCallback<AuthenticationResult>(){
+
+                    @Override
+                    public void onSuccess(AuthenticationResult authenticationResult) {
+                        showMessage("Response from broker: " + authenticationResult.getAccessToken());
+                        available.release();
+                    }
+
+                    @Override
+                    public void onError(Exception exc) {
+                        showMessage("Error occured when acquiring token silently: " + exc.getMessage());
+                        available.release();
+                    }
+                });
+            }
+        }*/
     }
 
     //Non-empty cache stress tests
@@ -393,38 +433,58 @@ public class MainActivity extends Activity {
     call will delete the AT when the call is finished. 
      */
 
-    private void callNonEmptyCacheStressTest(String User_UPN) throws InterruptedException{
+    private void callNonEmptyCacheStressTest(final String User_UPN) throws InterruptedException{
         final int MAX_AVAILABLE = 10;
-        final int TIME_LIMIT = 10 * 1000; //2 * 60 * 60 * 1000;
-        final Semaphore available = new Semaphore(MAX_AVAILABLE, true);
+        final int TIME_LIMIT = 8 * 60 * 60 * 1000;
+        //final Semaphore available = new Semaphore(MAX_AVAILABLE, true);
         final long startTime = System.currentTimeMillis();
 
-        //clear the cache
-        mAuthContext.getCache().removeAll();
+        ExecutorService executor = Executors.newFixedThreadPool(MAX_AVAILABLE);
 
-        //get the token with interactive auth
-        callAcquireTokenWithResource(RESOURCE_ID, PromptBehavior.Auto, User_UPN);
-
-
-        while ((System.currentTimeMillis() - startTime) < TIME_LIMIT)
-        {
-            available.tryAcquire(1);
-            mAuthContext.acquireTokenSilentAsync(RESOURCE_ID, CLIENT_ID, User_UPN, new AuthenticationCallback<AuthenticationResult>(){
+        while(System.currentTimeMillis() - startTime < TIME_LIMIT) {
+            executor.submit(new Runnable() {
                 @Override
-                public void onSuccess(AuthenticationResult authenticationResult) {
-                    available.release(1);
-                }
-                @Override
-                public void onError(Exception exc) {
-                    available.release(1);
+                public void run() {
+                    mAuthContext.acquireTokenSilentAsync(RESOURCE_ID, CLIENT_ID, User_UPN, new AuthenticationCallback<AuthenticationResult>() {
+
+                        @Override
+                        public void onSuccess(AuthenticationResult authenticationResult) {
+                            //showMessage("Response from broker: " + authenticationResult.getAccessToken());
+                        }
+
+                        @Override
+                        public void onError(Exception exc) {
+                            //showMessage("Error occured when acquiring token silently: " + exc.getMessage());
+                        }
+                    });
                 }
             });
         }
+        executor.shutdownNow();
+        System.err.println( "All done." );
+
+        /*while ((System.currentTimeMillis() - startTime) < TIME_LIMIT)
+        {
+            //if (available.tryAcquire(1)) {
+            available.acquireUninterruptibly();
+            mAuthContext.acquireTokenSilentAsync(RESOURCE_ID, CLIENT_ID, User_UPN, new AuthenticationCallback<AuthenticationResult>(){
+                @Override
+                public void onSuccess(final AuthenticationResult authenticationResult) {
+                    available.release();
+                    showMessage("permit got released");
+                }
+                @Override
+                public void onError(final Exception exc) {
+                    available.release();
+                    showMessage("permit got released");
+                }
+            });
+        }*/
     }
 
     private void callAcquireTokenSilentPolling() {
 
-        
+
     }
 
 
