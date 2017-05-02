@@ -34,6 +34,7 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.pm.Signature;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Base64;
@@ -81,33 +82,19 @@ public class MainActivity extends Activity {
 
     private static final String TAG = "MainActivity";
 
-    // AAD PARAMETERS
     /**
      * https://login.windows.net/tenantInfo
      */
-    private static final String AUTHORITY_URL = "https://login.microsoftonline.com/yourtenantinfo";
+    private static final String AUTHORITY_URL = "https://login.microsoftonline.com/common";//"https://login.microsoftonline.com/wvivianjiagmail.onmicrosoft.com";
 
-    /**
-     * Client id is given from AAD page when you register your native app. 
-     */
-    private static final String CLIENT_ID = "your-clientid";
+    private static final String CLIENT_ID="6bd5869a-2c98-4264-b16f-c41f7762ace2";//"2652503c-ba8e-4ed9-b2ea-6512b9f16c98";//
 
-    /**
-     * To use broker, Developer needs to register special redirectUri in Azure Portal for broker usage. RedirectUri is 
-     * in the format of msauth://packagename/Base64UrlencodedSignature.
-     */
-    private static final String REDIRECT_URL = "msauth://packagename/Base64EncodedSignature";
+    private static final String REDIRECT_URL="msauth://com.microsoft.aad.adal.userappwithbroker/AyptwvRgqjbFju1%2FfsnGRmFOxhU%3D";
 
-    /**
-     * URI for the resource. You need to setup this resource at AAD. 
-     * @note: With the new broker with PRT support, even resource or user don't have policy on to enforce
-     * conditional access, when you have broker app installed, you'll still be able to talk to broker. And
-     * broker will support multiple users, one WPJ account and multiple aad users. 
-     */
-    private static final String RESOURCE_ID = "your-resource-with-CA-policy";
-    
-    private static final String RESOURCE_ID2 = "your-resource";
-    
+    private static final String RESOURCE_ID="00000002-0000-0000-c000-000000000000";//"https://graph.windows.net";//"https://msdevex-my.sharepoint.com";
+
+    private static final String RESOURCE_ID2="https://api.office.com/discovery";
+
     private static final String SHARED_PREFERENCE_STORE_USER_UNIQUEID = "user.app.withbroker.uniqueidstorage";
 
     private AuthenticationContext mAuthContext;
@@ -200,6 +187,21 @@ public class MainActivity extends Activity {
             public void onClick(View v) {
                 try {
                     callEmptyCacheStressTest(getUserLoginHint());
+                } catch (final InterruptedException exception) {
+                    //TODO
+                    showMessage("Exception caught here: " + exception.getMessage());
+                }
+
+            }
+        });
+        //callAcquireTokenSilentPolling
+        Button buttonAcquireTokenSilentPolling = (Button)findViewById(R.id.AcquireTokenSilentPolling);
+        buttonAcquireTokenSilentPolling.setOnClickListener(new View.OnClickListener() {
+
+            @Override
+            public void onClick(View v) {
+                try {
+                    callAcquireTokenSilentPolling();
                 } catch (final InterruptedException exception) {
                     //TODO
                     showMessage("Exception caught here: " + exception.getMessage());
@@ -371,59 +373,38 @@ public class MainActivity extends Activity {
     time for 8 hours, while the cache is empty.
 */
     private void callEmptyCacheStressTest(final String User_UPN) throws InterruptedException{
+
         final int MAX_AVAILABLE = 10;
-        final int TIME_LIMIT = 10 * 1000;
+        final int TIME_LIMIT = 8 * 60 * 60 * 1000;
         final Semaphore available = new Semaphore(MAX_AVAILABLE, true);
         final long startTime = System.currentTimeMillis();
+        final ExecutorService executor = Executors.newFixedThreadPool(MAX_AVAILABLE);
 
         //clear the cache
         mAuthContext.getCache().removeAll();
 
-        ExecutorService executor = Executors.newFixedThreadPool(10);
-
         while(System.currentTimeMillis() - startTime < TIME_LIMIT) {
+            available.acquireUninterruptibly();
             executor.submit(new Runnable() {
                 @Override
                 public void run() {
-                    mAuthContext.acquireTokenSilentAsync(RESOURCE_ID, CLIENT_ID, User_UPN, new AuthenticationCallback<AuthenticationResult>() {
+                    mAuthContext.acquireTokenSilentAsync(RESOURCE_ID, CLIENT_ID, "user@msdevex.onmicrosoft.com", new AuthenticationCallback<AuthenticationResult>() {
 
                         @Override
                         public void onSuccess(AuthenticationResult authenticationResult) {
-                            //showMessage("Response from broker: " + authenticationResult.getAccessToken());
+                            available.release();
                         }
 
                         @Override
                         public void onError(Exception exc) {
-                            //showMessage("Error occured when acquiring token silently: " + exc.getMessage());
+                            available.release();
                         }
                     });
                 }
             });
         }
-
         executor.shutdownNow();
         System.err.println( "All done." );
-
-        /*while ((System.currentTimeMillis() - startTime) < TIME_LIMIT)
-        {
-            if (available.tryAcquire()) {
-                Logger.v("callEmptyCacheStressTest", "Inside Avail permits: " + available.availablePermits());
-                mAuthContext.acquireTokenSilentAsync(RESOURCE_ID, CLIENT_ID, User_UPN, new AuthenticationCallback<AuthenticationResult>(){
-
-                    @Override
-                    public void onSuccess(AuthenticationResult authenticationResult) {
-                        showMessage("Response from broker: " + authenticationResult.getAccessToken());
-                        available.release();
-                    }
-
-                    @Override
-                    public void onError(Exception exc) {
-                        showMessage("Error occured when acquiring token silently: " + exc.getMessage());
-                        available.release();
-                    }
-                });
-            }
-        }*/
     }
 
     //Non-empty cache stress tests
@@ -442,10 +423,11 @@ public class MainActivity extends Activity {
         ExecutorService executor = Executors.newFixedThreadPool(MAX_AVAILABLE);
         while(System.currentTimeMillis() - startTime < TIME_LIMIT) {
             if(available.tryAcquire()) {
+                final AuthenticationContext authContext = new AuthenticationContext(getApplicationContext(), AUTHORITY_URL, true);
                 executor.submit(new Runnable() {
                     @Override
                     public void run() {
-                        mAuthContext.acquireTokenSilentAsync(RESOURCE_ID, CLIENT_ID, User_UPN, new AuthenticationCallback<AuthenticationResult>() {
+                        authContext.acquireTokenSilentAsync(RESOURCE_ID, CLIENT_ID, User_UPN, new AuthenticationCallback<AuthenticationResult>() {
 
                             @Override
                             public void onSuccess(AuthenticationResult authenticationResult) {
@@ -467,9 +449,37 @@ public class MainActivity extends Activity {
         System.err.println( "All done." );
     }
 
-    private void callAcquireTokenSilentPolling() {
+    private void callAcquireTokenSilentPolling() throws InterruptedException{
+        //callAcquireTokenWithResource(RESOURCE_ID, PromptBehavior.Auto, getUserLoginHint());
+//        final ExecutorService executor = Executors.newSingleThreadExecutor();
+//        executor.submit(new Runnable() {
+//            @Override
+//            public void run() {
+                callAcquireTokenWithResource(RESOURCE_ID, PromptBehavior.Auto, getUserLoginHint());
+//            }
+//        });
 
+        final Semaphore available = new Semaphore(1, true);
+        available.acquire();
+        while (!available.tryAcquire()){
+            AsyncTask.execute(new Runnable() {
+                                  @Override
+                                  public void run() {
+                                      mAuthContext.acquireTokenSilentAsync(RESOURCE_ID, CLIENT_ID, "user@msdevex.onmicrosoft.com", new AuthenticationCallback<AuthenticationResult>() {
 
+                                          @Override
+                                          public void onSuccess(AuthenticationResult authenticationResult) {
+                                              available.release();
+                                          }
+
+                                          @Override
+                                          public void onError(Exception exc) {
+                                          }
+                                      });
+                                  }
+                              });
+            Thread.sleep(500);
+        }
     }
 
 
