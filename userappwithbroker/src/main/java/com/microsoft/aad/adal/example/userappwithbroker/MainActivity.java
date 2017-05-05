@@ -65,10 +65,15 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
@@ -372,40 +377,75 @@ public class MainActivity extends Activity {
      10 threads calling acquireTokenSilient at the same
     time for 8 hours, while the cache is empty.
 */
-    private void callEmptyCacheStressTest(final String User_UPN) throws InterruptedException{
+//    private void callEmptyCacheStressTest(final String User_UPN) throws InterruptedException{
+//
+//        final int MAX_AVAILABLE = 10;
+//        final int TIME_LIMIT = 8 * 60 * 60 * 1000;
+//        //final Semaphore available = new Semaphore(MAX_AVAILABLE, true);
+//        final long startTime = System.currentTimeMillis();
+//        final ExecutorService executor = Executors.newFixedThreadPool(MAX_AVAILABLE);
+//
+//        //clear the cache
+//        mAuthContext.getCache().removeAll();
+//
+//        while(System.currentTimeMillis() - startTime < TIME_LIMIT) {
+//            //available.acquireUninterruptibly();
+//            executor.submit(new Runnable() {
+//                @Override
+//                public void run() {
+//                    mAuthContext.acquireTokenSilentAsync(RESOURCE_ID, CLIENT_ID, "user@msdevex.onmicrosoft.com", new AuthenticationCallback<AuthenticationResult>() {
+//
+//                        @Override
+//                        public void onSuccess(AuthenticationResult authenticationResult) {
+//                            System.err.println( "WTF success");
+//                            //available.release();
+//                        }
+//
+//                        @Override
+//                        public void onError(Exception exc) {
+//                            System.err.println( "WTF error");
+//                            //available.release();
+//                        }
+//                    });
+//                }
+//            });
+//        }
+//        executor.shutdownNow();
+//        System.err.println( "All done." );
+//    }
 
+    private void callEmptyCacheStressTest(final String User_UPN) throws InterruptedException {
         final int MAX_AVAILABLE = 10;
         final int TIME_LIMIT = 8 * 60 * 60 * 1000;
-        final Semaphore available = new Semaphore(MAX_AVAILABLE, true);
         final long startTime = System.currentTimeMillis();
-        final ExecutorService executor = Executors.newFixedThreadPool(MAX_AVAILABLE);
 
-        //clear the cache
+
         mAuthContext.getCache().removeAll();
+        BlockingQueue<Runnable> blockingQueue = new ArrayBlockingQueue<Runnable>(10);
+        RejectedExecutionHandler rejectedExecutionHandler = new ThreadPoolExecutor.CallerRunsPolicy();
+        ExecutorService executor = new ThreadPoolExecutor(1, MAX_AVAILABLE, 0L, TimeUnit.MILLISECONDS, blockingQueue, rejectedExecutionHandler);
 
         while(System.currentTimeMillis() - startTime < TIME_LIMIT) {
-            available.acquireUninterruptibly();
             executor.submit(new Runnable() {
                 @Override
                 public void run() {
-                    mAuthContext.acquireTokenSilentAsync(RESOURCE_ID, CLIENT_ID, "user@msdevex.onmicrosoft.com", new AuthenticationCallback<AuthenticationResult>() {
-
+                    mAuthContext.acquireTokenSilentAsync(RESOURCE_ID, CLIENT_ID, User_UPN, new AuthenticationCallback<AuthenticationResult>() {
                         @Override
                         public void onSuccess(AuthenticationResult authenticationResult) {
-                            available.release();
+                            System.err.println( "WTF success");
                         }
-
                         @Override
                         public void onError(Exception exc) {
-                            available.release();
+                            System.err.println( "WTF error");
                         }
                     });
                 }
             });
+            Thread.sleep(50);
         }
         executor.shutdownNow();
         System.err.println( "All done." );
-    }
+}
 
     //Non-empty cache stress tests
     /*
@@ -413,41 +453,71 @@ public class MainActivity extends Activity {
     at the same time for 8 hours. Each acquireTokenSilent
     call will delete the AT when the call is finished. 
      */
-
-    private void callNonEmptyCacheStressTest(final String User_UPN) throws InterruptedException{
+    private void callNonEmptyCacheStressTest(final String User_UPN) throws InterruptedException {
         final int MAX_AVAILABLE = 10;
         final int TIME_LIMIT = 8 * 60 * 60 * 1000;
-        final Semaphore available = new Semaphore(MAX_AVAILABLE, true);
         final long startTime = System.currentTimeMillis();
 
-        ExecutorService executor = Executors.newFixedThreadPool(MAX_AVAILABLE);
+        BlockingQueue<Runnable> blockingQueue = new ArrayBlockingQueue<Runnable>(10);
+        RejectedExecutionHandler rejectedExecutionHandler = new ThreadPoolExecutor.CallerRunsPolicy();
+        ExecutorService executor = new ThreadPoolExecutor(1, MAX_AVAILABLE, 0L, TimeUnit.MILLISECONDS, blockingQueue, rejectedExecutionHandler);
+
         while(System.currentTimeMillis() - startTime < TIME_LIMIT) {
-            if(available.tryAcquire()) {
-                final AuthenticationContext authContext = new AuthenticationContext(getApplicationContext(), AUTHORITY_URL, true);
-                executor.submit(new Runnable() {
-                    @Override
-                    public void run() {
-                        authContext.acquireTokenSilentAsync(RESOURCE_ID, CLIENT_ID, User_UPN, new AuthenticationCallback<AuthenticationResult>() {
-
-                            @Override
-                            public void onSuccess(AuthenticationResult authenticationResult) {
-                                available.release();
-                            }
-
-                            @Override
-                            public void onError(Exception exc) {
-                                available.release();
-                            }
-                        });
-                    }
-                });
-            } else {
-                Thread.sleep(500);
-            }
+            executor.submit(new Runnable() {
+                @Override
+                public void run() {
+                    mAuthContext.acquireTokenSilentAsync(RESOURCE_ID, CLIENT_ID, User_UPN, new AuthenticationCallback<AuthenticationResult>() {
+                        @Override
+                        public void onSuccess(AuthenticationResult authenticationResult) {
+                            System.err.println( "WTF success");
+                        }
+                        @Override
+                        public void onError(Exception exc) {
+                            System.err.println( "WTF error");
+                        }
+                    });
+                }
+            });
+            Thread.sleep(50);
         }
         executor.shutdownNow();
         System.err.println( "All done." );
-    }
+}
+
+//    private void callNonEmptyCacheStressTest(final String User_UPN) throws InterruptedException{
+//        final int MAX_AVAILABLE = 10;
+//        final int TIME_LIMIT = 8 * 60 * 60 * 1000;
+//        final Semaphore available = new Semaphore(MAX_AVAILABLE, true);
+//        final long startTime = System.currentTimeMillis();
+//
+//        ExecutorService executor = Executors.newFixedThreadPool(MAX_AVAILABLE);
+//        while(System.currentTimeMillis() - startTime < TIME_LIMIT) {
+//            if(available.tryAcquire()) {
+//                final AuthenticationContext authContext = new AuthenticationContext(getApplicationContext(), AUTHORITY_URL, true);
+//                executor.submit(new Runnable() {
+//                    @Override
+//                    public void run() {
+//                        authContext.acquireTokenSilentAsync(RESOURCE_ID, CLIENT_ID, User_UPN, new AuthenticationCallback<AuthenticationResult>() {
+//
+//                            @Override
+//                            public void onSuccess(AuthenticationResult authenticationResult) {
+//                                available.release();
+//                            }
+//
+//                            @Override
+//                            public void onError(Exception exc) {
+//                                available.release();
+//                            }
+//                        });
+//                    }
+//                });
+//            } else {
+//                Thread.sleep(500);
+//            }
+//        }
+//        executor.shutdownNow();
+//        System.err.println( "All done." );
+//    }
 
     private void callAcquireTokenSilentPolling() throws InterruptedException{
         //callAcquireTokenWithResource(RESOURCE_ID, PromptBehavior.Auto, getUserLoginHint());
