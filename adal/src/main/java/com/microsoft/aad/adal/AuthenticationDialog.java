@@ -33,11 +33,14 @@ import android.net.http.SslError;
 import android.os.Handler;
 import android.util.Base64;
 import android.util.Log;
+import android.view.Display;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.WindowManager;
 import android.webkit.HttpAuthHandler;
 import android.webkit.SslErrorHandler;
+import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.widget.ProgressBar;
 import java.io.UnsupportedEncodingException;
@@ -144,8 +147,11 @@ class AuthenticationDialog {
 
                 mWebView.getSettings().setLoadWithOverviewMode(true);
                 mWebView.getSettings().setDomStorageEnabled(true);
-                mWebView.getSettings().setUseWideViewPort(true);
-                mWebView.getSettings().setBuiltInZoomControls(true);
+                mWebView.getSettings().setUseWideViewPort(false);
+                mWebView.getSettings().setBuiltInZoomControls(false);
+                mWebView.getSettings().setLayoutAlgorithm(WebSettings.LayoutAlgorithm.SINGLE_COLUMN);
+                mWebView.setHorizontalScrollBarEnabled(false);
+                mWebView.setInitialScale(getScale());
 
                 try {
                     Oauth2 oauth = new Oauth2(mRequest);
@@ -210,6 +216,14 @@ class AuthenticationDialog {
                 mDialog.show();
             }
         });
+    }
+
+    private int getScale(){
+        Display display = ((WindowManager) mContext.getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay();
+        int width = display.getWidth();
+        Double val = new Double(width)/new Double(360);
+        val = val * 100d;
+        return val.intValue();
     }
 
     private void cancelFlow() {
