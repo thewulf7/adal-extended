@@ -1294,4 +1294,12 @@ public class AuthenticationContext {
         System.setProperty("https.proxyHost", host);
         System.setProperty("https.proxyPort", port + "");
     }
+
+    public void clearProxy() {
+        System.clearProperty("http.proxyHost");
+        System.clearProperty("http.proxyPort");
+
+        System.clearProperty("https.proxyHost");
+        System.clearProperty("https.proxyPort");
+    }
 }

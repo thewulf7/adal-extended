@@ -169,11 +169,14 @@ class AuthenticationDialog {
                             @Override
                             public void run() {
                                 //prepare headers
-                                String up = proxy.getUser() + ":" + proxy.getPassword();
-                                String authEncoded = new String(Base64.encode(up.getBytes(), Base64.DEFAULT));
-                                String authHeader = "Basic " +authEncoded;
                                 Map<String, String> headers = new HashMap<>();
-                                headers.put("Authorization", authHeader);
+
+                                if(proxy.getUser() != null) {
+                                    String up = proxy.getUser() + ":" + proxy.getPassword();
+                                    String authEncoded = new String(Base64.encode(up.getBytes(), Base64.DEFAULT));
+                                    String authHeader = "Basic " + authEncoded;
+                                    headers.put("Authorization", authHeader);
+                                }
 
                                 mWebView.loadUrl("about:blank");
                                 mWebView.loadUrl(startUrl, headers);

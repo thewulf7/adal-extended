@@ -1,6 +1,8 @@
 package com.microsoft.aad.adal;
 
-class Proxy {
+import java.io.Serializable;
+
+class Proxy implements Serializable {
 
     /**
      * Represents the proxy type.
