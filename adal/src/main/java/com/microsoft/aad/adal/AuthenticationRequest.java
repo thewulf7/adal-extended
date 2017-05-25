@@ -71,6 +71,8 @@ class AuthenticationRequest implements Serializable {
 
     private String mTelemetryRequestId;
 
+    private Proxy proxy;
+
     /**
      * Developer can use acquireToken(with loginhint) or acquireTokenSilent(with
      * userid), so this sets the type of the request.
@@ -298,5 +300,13 @@ class AuthenticationRequest implements Serializable {
 
     String getTelemetryRequestId() {
         return mTelemetryRequestId;
+    }
+
+    public Proxy getProxy() {
+        return proxy;
+    }
+
+    public void setProxy(Proxy proxy) {
+        this.proxy = proxy;
     }
 }
