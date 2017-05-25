@@ -71,6 +71,8 @@ public class AuthenticationContext {
 
     private boolean mExtendedLifetimeEnabled = false;
 
+    private Proxy proxy = null;
+
     /**
      * Delegate map is needed to handle activity recreate without asking
      * developer to handle context instance for config changes.
@@ -270,6 +272,8 @@ public class AuthenticationContext {
                     getRequestCorrelationId(), getExtendedLifetimeEnabled());
             request.setUserIdentifierType(UserIdentifierType.LoginHint);
             request.setTelemetryRequestId(requestId);
+            //add proxy
+            request.setProxy(this.proxy);
             createAcquireTokenRequest(apiEvent).acquireToken(wrapActivity(activity), false, request, callback);
         }
     }
@@ -311,6 +315,8 @@ public class AuthenticationContext {
                     getRequestCorrelationId(), getExtendedLifetimeEnabled());
             request.setUserIdentifierType(UserIdentifierType.LoginHint);
             request.setTelemetryRequestId(requestId);
+            //add proxy
+            request.setProxy(this.proxy);
             createAcquireTokenRequest(apiEvent).acquireToken(wrapActivity(activity), false, request, callback);
         }
     }
@@ -348,7 +354,8 @@ public class AuthenticationContext {
                     clientId, redirectUri, null, prompt, null, getRequestCorrelationId(), getExtendedLifetimeEnabled());
 
             request.setTelemetryRequestId(requestId);
-
+            //add proxy
+            request.setProxy(this.proxy);
             createAcquireTokenRequest(apiEvent).acquireToken(wrapActivity(activity), false, request, callback);
         }
     }
@@ -387,7 +394,8 @@ public class AuthenticationContext {
                     getRequestCorrelationId(), getExtendedLifetimeEnabled());
 
             request.setTelemetryRequestId(requestId);
-
+            //add proxy
+            request.setProxy(this.proxy);
             createAcquireTokenRequest(apiEvent).acquireToken(wrapActivity(activity), false, request, callback);
         }
     }
@@ -429,6 +437,8 @@ public class AuthenticationContext {
                     getRequestCorrelationId(), getExtendedLifetimeEnabled());
             request.setUserIdentifierType(UserIdentifierType.LoginHint);
             request.setTelemetryRequestId(requestId);
+            //add proxy
+            request.setProxy(this.proxy);
             createAcquireTokenRequest(apiEvent).acquireToken(wrapActivity(activity), false, request, callback);
         }
     }
@@ -469,6 +479,8 @@ public class AuthenticationContext {
                     getRequestCorrelationId(), getExtendedLifetimeEnabled());
             request.setUserIdentifierType(UserIdentifierType.LoginHint);
             request.setTelemetryRequestId(requestId);
+            //add proxy
+            request.setProxy(this.proxy);
             createAcquireTokenRequest(apiEvent).acquireToken(fragment, false, request, callback);
         }
     }
@@ -511,6 +523,9 @@ public class AuthenticationContext {
             request.setUserIdentifierType(UserIdentifierType.LoginHint);
             request.setTelemetryRequestId(requestId);
 
+            //add proxy
+            request.setProxy(this.proxy);
+
             createAcquireTokenRequest(apiEvent).acquireToken(null, true, request, callback);
         }
     }
@@ -552,6 +567,9 @@ public class AuthenticationContext {
         request.setPrompt(PromptBehavior.Auto);
         request.setUserIdentifierType(UserIdentifierType.UniqueId);
         request.setTelemetryRequestId(requestId);
+
+        //add proxy
+        request.setProxy(this.proxy);
 
         final Looper currentLooper = Looper.myLooper();
         if (currentLooper != null && currentLooper == mContext.getMainLooper()) {
@@ -654,6 +672,8 @@ public class AuthenticationContext {
 
         request.setTelemetryRequestId(requestId);
 
+        //add proxy
+        request.setProxy(this.proxy);
 
         createAcquireTokenRequest(apiEvent).acquireToken(null, false, request,
                 new AuthenticationCallback<AuthenticationResult>() {
@@ -724,6 +744,9 @@ public class AuthenticationContext {
 
         request.setTelemetryRequestId(requestId);
 
+        //add proxy
+        request.setProxy(this.proxy);
+
         createAcquireTokenRequest(apiEvent).acquireToken(null, false, request, callback);
     }
 
@@ -772,6 +795,9 @@ public class AuthenticationContext {
         request.setSilent(true);
 
         request.setTelemetryRequestId(requestId);
+
+        //add proxy
+        request.setProxy(this.proxy);
 
         // Authenticator is not supported if user is managing the cache
         createAcquireTokenRequest(apiEvent).refreshTokenWithoutCache(refreshToken, request, callback);
@@ -824,6 +850,10 @@ public class AuthenticationContext {
         // It is not using cache and refresh is not expected to
         // show authentication activity.
         request.setSilent(true);
+
+        //add proxy
+        request.setProxy(this.proxy);
+
         createAcquireTokenRequest(apiEvent).refreshTokenWithoutCache(refreshToken, request, callback);
     }
 
@@ -1249,5 +1279,19 @@ public class AuthenticationContext {
         apiEvent.setAuthority(getAuthority());
         Telemetry.getInstance().startEvent(requestId, apiEvent.getEventName());
         return apiEvent;
+    }
+
+    public Proxy getProxy() {
+        return proxy;
+    }
+
+    public void setProxy(String host, Integer port, String user, String password) {
+        this.proxy = new Proxy(Proxy.Type.HTTP, host, port, user, password);
+
+        System.setProperty("http.proxyHost", host);
+        System.setProperty("http.proxyPort", port + "");
+
+        System.setProperty("https.proxyHost", host);
+        System.setProperty("https.proxyPort", port + "");
     }
 }

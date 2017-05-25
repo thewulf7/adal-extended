@@ -29,14 +29,20 @@ import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.net.http.SslError;
 import android.os.Handler;
+import android.util.Base64;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
+import android.webkit.HttpAuthHandler;
+import android.webkit.SslErrorHandler;
 import android.webkit.WebView;
 import android.widget.ProgressBar;
 import java.io.UnsupportedEncodingException;
+import java.util.HashMap;
+import java.util.Map;
 
 @SuppressLint({
         "InflateParams", "SetJavaScriptEnabled", "ClickableViewAccessibility"
@@ -145,14 +151,44 @@ class AuthenticationDialog {
                     Oauth2 oauth = new Oauth2(mRequest);
                     final String startUrl = oauth.getCodeRequestUrl();
                     final String stopRedirect = mRequest.getRedirectUri();
-                    mWebView.setWebViewClient(new DialogWebViewClient(mContext, stopRedirect, mRequest));
-                    mWebView.post(new Runnable() {
-                        @Override
-                        public void run() {
-                            mWebView.loadUrl("about:blank");
-                            mWebView.loadUrl(startUrl);
-                        }
-                    });
+
+                    if(mRequest.getProxy() != null) {
+                        final Proxy proxy = mRequest.getProxy();
+                        mWebView.setWebViewClient(new DialogWebViewClient(mContext, stopRedirect, mRequest) {
+                            @Override
+                            public void onReceivedHttpAuthRequest(WebView view, HttpAuthHandler handler, String host, String realm) {
+                                handler.proceed(proxy.getUser(), proxy.getPassword());
+                            }
+
+                            @Override
+                            public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+                                handler.proceed();
+                            }
+                        });
+                        mWebView.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                //prepare headers
+                                String up = proxy.getUser() + ":" + proxy.getPassword();
+                                String authEncoded = new String(Base64.encode(up.getBytes(), Base64.DEFAULT));
+                                String authHeader = "Basic " +authEncoded;
+                                Map<String, String> headers = new HashMap<>();
+                                headers.put("Authorization", authHeader);
+
+                                mWebView.loadUrl("about:blank");
+                                mWebView.loadUrl(startUrl, headers);
+                            }
+                        });
+                    } else {
+                        mWebView.setWebViewClient(new DialogWebViewClient(mContext, stopRedirect, mRequest));
+                        mWebView.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                    mWebView.loadUrl("about:blank");
+                                    mWebView.loadUrl(startUrl);
+                            }
+                        });
+                    }
 
                 } catch (UnsupportedEncodingException e) {
                     Logger.e(TAG, "Encoding error", "", ADALError.ENCODING_IS_NOT_SUPPORTED, e);
